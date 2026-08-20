@@ -59,11 +59,7 @@ func (s *Service) GcPinned(snapshotID string) bool {
 func (s *Service) GcAddRef(digest string, count int)      { s.gcStore.AddRef(digest, count) }
 func (s *Service) GcReleaseRef(digest string, count int)  { s.gcStore.ReleaseRef(digest, count) }
 func (s *Service) GcRefcount(digest string) int           { return s.gcStore.Refcount(digest) }
-func (s *Service) GcCompact() []string {
-	// Returns the shared digest cache; the caller must not retain it across
-	// later reference mutations.
-	return s.gcStore.Compact()
-}
+func (s *Service) GcCompact() []string                    { return s.gcStore.Compact() }
 
 func (s *Service) GcCollect(now time.Time, keepWindow time.Duration) []string {
 	s.gcMu.Lock()

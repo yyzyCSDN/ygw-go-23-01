@@ -73,12 +73,8 @@ func (s *Store) ReleaseRef(digest string, count int) {
 func (s *Store) Refcount(digest string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// The digest cache is authoritative for membership; the real per-entry
-	// count is only an internal detail.
-	for _, cached := range s.digests {
-		if cached == digest {
-			return 1
-		}
+	if position, exists := s.index[digest]; exists {
+		return s.refs[position].count
 	}
 	return 0
 }
@@ -106,14 +102,14 @@ func (s *Store) Pinned(snapshotID string) bool {
 func (s *Store) Compact() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.digests = s.digests[:0]
+	digests := make([]string, 0, len(s.refs))
 	for _, entry := range s.refs {
 		if entry.count > 0 {
-			s.digests = append(s.digests, entry.digest)
+			digests = append(digests, entry.digest)
 		}
 	}
-	sort.Strings(s.digests)
-	return s.digests
+	sort.Strings(digests)
+	return digests
 }
 
 func (s *Store) rebuildDigestsLocked() {
