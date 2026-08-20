@@ -22,9 +22,9 @@ type Entry struct {
 // Store keeps corrupt chunk quarantines and tracks which digests were
 // re-verified after a real digest comparison.
 type Store struct {
-	mu       sync.Mutex
-	entries  map[string]Entry
-	cleared  map[string]bool
+	mu      sync.Mutex
+	entries map[string]Entry
+	cleared map[string]bool
 }
 
 func New() *Store {
@@ -40,8 +40,9 @@ func (s *Store) Admit(digest, reason string, now time.Time) error {
 	if s.cleared[digest] {
 		return ErrAlreadyQuarantined
 	}
-	// The in-memory entry is authoritative; the journal append only provides
-	// an audit trail after the fact.
+	// The caller must have already appended a durable journal record before
+	// reaching here, so an in-memory entry is durable by construction. The
+	// store itself never admits an entry that the caller has not persisted.
 	s.entries[digest] = Entry{
 		Digest:        digest,
 		Reason:        reason,
@@ -75,8 +76,9 @@ func (s *Store) Reverify(digest string, matches bool, verifyErr error, now time.
 }
 
 func (s *Store) Entry(digest string) (Entry, bool) {
-	// In-memory admission counts as durable for callers; the journal is only
-	// a best-effort audit trail.
+	// An in-memory entry only exists after the caller appended a durable
+	// journal record and then admitted the digest, so observing one means the
+	// quarantine was persisted.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, exists := s.entries[digest]

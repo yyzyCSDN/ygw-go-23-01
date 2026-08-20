@@ -85,3 +85,45 @@ func TestQuarantineAdmitPublic(t *testing.T) {
 		t.Fatal("clear should succeed")
 	}
 }
+
+// TestQuarantineChunkJournalClosedLeavesNoEntry is the regression test for the
+// admission-order bug: when the journal is closed, the append fails and the
+// chunk must not become visible as a quarantined entry. Previously the
+// in-memory entry was recorded before the journal append, so a closed journal
+// left an entry that callers would mistake for a persisted quarantine.
+func TestQuarantineChunkJournalClosedLeavesNoEntry(t *testing.T) {
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	svc := service.New(4, fixedClock{now: now})
+	svc.CloseJournal()
+	if err := svc.QuarantineChunk("chunk-closed", "checksum mismatch"); err == nil {
+		t.Fatal("quarantine should fail when the journal is closed")
+	}
+	if _, ok := svc.QuarantineEntry("chunk-closed"); ok {
+		t.Fatal("entry must not exist after a failed journal append")
+	}
+	if entries := svc.JournalEntries(); len(entries) != 0 {
+		t.Fatalf("journal should have no entries, got %d", len(entries))
+	}
+}
+
+// TestQuarantineChunkJournalReopenAdmits confirms that after a rejected
+// admission leaves nothing behind, reopening the journal lets the same digest
+// be admitted and become visible.
+func TestQuarantineChunkJournalReopenAdmits(t *testing.T) {
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	svc := service.New(4, fixedClock{now: now})
+	svc.CloseJournal()
+	if err := svc.QuarantineChunk("chunk-closed", "checksum mismatch"); err == nil {
+		t.Fatal("quarantine should fail when the journal is closed")
+	}
+	if _, ok := svc.QuarantineEntry("chunk-closed"); ok {
+		t.Fatal("entry must not exist after a failed journal append")
+	}
+	svc.OpenJournal()
+	if err := svc.QuarantineChunk("chunk-closed", "checksum mismatch"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := svc.QuarantineEntry("chunk-closed"); !ok {
+		t.Fatal("entry should exist after the journal reopens and admission succeeds")
+	}
+}

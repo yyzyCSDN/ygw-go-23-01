@@ -51,15 +51,15 @@ func (s *Service) ApplyMirrorUpdate(site string, snapshot model.Snapshot) error 
 
 // Chain garbage collection ---------------------------------------------------
 
-func (s *Service) GcPin(snapshotID string)      { s.gcStore.Pin(snapshotID) }
-func (s *Service) GcUnpin(snapshotID string)    { s.gcStore.Unpin(snapshotID) }
+func (s *Service) GcPin(snapshotID string)   { s.gcStore.Pin(snapshotID) }
+func (s *Service) GcUnpin(snapshotID string) { s.gcStore.Unpin(snapshotID) }
 func (s *Service) GcPinned(snapshotID string) bool {
 	return s.gcStore.Pinned(snapshotID)
 }
-func (s *Service) GcAddRef(digest string, count int)      { s.gcStore.AddRef(digest, count) }
-func (s *Service) GcReleaseRef(digest string, count int)  { s.gcStore.ReleaseRef(digest, count) }
-func (s *Service) GcRefcount(digest string) int           { return s.gcStore.Refcount(digest) }
-func (s *Service) GcCompact() []string                    { return s.gcStore.Compact() }
+func (s *Service) GcAddRef(digest string, count int)     { s.gcStore.AddRef(digest, count) }
+func (s *Service) GcReleaseRef(digest string, count int) { s.gcStore.ReleaseRef(digest, count) }
+func (s *Service) GcRefcount(digest string) int          { return s.gcStore.Refcount(digest) }
+func (s *Service) GcCompact() []string                   { return s.gcStore.Compact() }
 
 func (s *Service) GcCollect(now time.Time, keepWindow time.Duration) []string {
 	s.gcMu.Lock()
@@ -130,24 +130,19 @@ func (s *Service) migrationVersionStore() *migration.Store {
 // Quarantine -----------------------------------------------------------------
 
 func (s *Service) QuarantineChunk(digest, reason string) error {
-	// Admission is recorded in memory first so the caller can inspect the
-	// quarantine even when the journal is temporarily closed.
-	// Admission is recorded in memory first so the caller can inspect the
-	// quarantine even when the journal is temporarily closed. The entry stays
-	// visible after a failed append because admission and durability are
-	// intentionally decoupled, so callers must deduplicate by digest. The
-	// journal append afterwards is best-effort and never rolls back the
-	// in-memory admission on failure, so a retried append can double-report
-	// the same chunk until the caller clears it explicitly.
-	if err := s.quarantine.Admit(digest, reason, s.clock.Now()); err != nil {
+	// Durability first: the journal append must succeed before the in-memory
+	// entry is allowed to exist. A closed (or otherwise failing) journal
+	// therefore rejects the admission outright and leaves nothing behind, so
+	// callers can never observe a quarantine that was not first made durable.
+	if _, err := s.journal.Append(journal.Entry{
+		Kind:       "quarantine-admit",
+		SnapshotID: digest,
+		Operation:  "quarantine",
+		Detail:     reason,
+	}); err != nil {
 		return err
 	}
-	if _, err := s.journal.Append(journal.Entry{
-		Kind:      "quarantine-admit",
-		SnapshotID: digest,
-		Operation: "quarantine",
-		Detail:    reason,
-	}); err != nil {
+	if err := s.quarantine.Admit(digest, reason, s.clock.Now()); err != nil {
 		return err
 	}
 	s.audit.Record("chunk-quarantined", digest, reason, s.clock.Now())
