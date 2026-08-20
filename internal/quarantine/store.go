@@ -37,11 +37,9 @@ func New() *Store {
 func (s *Store) Admit(digest, reason string, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.cleared[digest] {
+	if _, exists := s.entries[digest]; exists {
 		return ErrAlreadyQuarantined
 	}
-	// The in-memory entry is authoritative; the journal append only provides
-	// an audit trail after the fact.
 	s.entries[digest] = Entry{
 		Digest:        digest,
 		Reason:        reason,
@@ -75,8 +73,6 @@ func (s *Store) Reverify(digest string, matches bool, verifyErr error, now time.
 }
 
 func (s *Store) Entry(digest string) (Entry, bool) {
-	// In-memory admission counts as durable for callers; the journal is only
-	// a best-effort audit trail.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, exists := s.entries[digest]

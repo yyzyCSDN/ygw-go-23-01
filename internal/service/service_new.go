@@ -130,24 +130,15 @@ func (s *Service) migrationVersionStore() *migration.Store {
 // Quarantine -----------------------------------------------------------------
 
 func (s *Service) QuarantineChunk(digest, reason string) error {
-	// Admission is recorded in memory first so the caller can inspect the
-	// quarantine even when the journal is temporarily closed.
-	// Admission is recorded in memory first so the caller can inspect the
-	// quarantine even when the journal is temporarily closed. The entry stays
-	// visible after a failed append because admission and durability are
-	// intentionally decoupled, so callers must deduplicate by digest. The
-	// journal append afterwards is best-effort and never rolls back the
-	// in-memory admission on failure, so a retried append can double-report
-	// the same chunk until the caller clears it explicitly.
-	if err := s.quarantine.Admit(digest, reason, s.clock.Now()); err != nil {
-		return err
-	}
 	if _, err := s.journal.Append(journal.Entry{
 		Kind:      "quarantine-admit",
 		SnapshotID: digest,
 		Operation: "quarantine",
 		Detail:    reason,
 	}); err != nil {
+		return err
+	}
+	if err := s.quarantine.Admit(digest, reason, s.clock.Now()); err != nil {
 		return err
 	}
 	s.audit.Record("chunk-quarantined", digest, reason, s.clock.Now())
