@@ -101,8 +101,10 @@ func (s *Store) Pinned(snapshotID string) bool {
 	return s.pins[snapshotID]
 }
 
-// Compact returns the live chunk digests in stable order. The result is a new
-// slice; callers may freely reorder it without aliasing the store state.
+// Compact returns the live chunk digests in stable order. The result is an
+// independent copy; callers may freely reorder or retain it, and it is not
+// mutated by later reference changes (AddRef/ReleaseRef rebuild the internal
+// cache in place).
 func (s *Store) Compact() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -113,7 +115,9 @@ func (s *Store) Compact() []string {
 		}
 	}
 	sort.Strings(s.digests)
-	return s.digests
+	result := make([]string, len(s.digests))
+	copy(result, s.digests)
+	return result
 }
 
 func (s *Store) rebuildDigestsLocked() {

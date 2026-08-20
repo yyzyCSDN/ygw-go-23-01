@@ -60,8 +60,8 @@ func (s *Service) GcAddRef(digest string, count int)      { s.gcStore.AddRef(dig
 func (s *Service) GcReleaseRef(digest string, count int)  { s.gcStore.ReleaseRef(digest, count) }
 func (s *Service) GcRefcount(digest string) int           { return s.gcStore.Refcount(digest) }
 func (s *Service) GcCompact() []string {
-	// Returns the shared digest cache; the caller must not retain it across
-	// later reference mutations.
+	// Returns an independent copy of the live digest set; the caller may retain
+	// it safely across later reference mutations.
 	return s.gcStore.Compact()
 }
 
