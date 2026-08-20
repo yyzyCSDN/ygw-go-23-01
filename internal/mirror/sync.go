@@ -24,12 +24,8 @@ func (l *Ledger) Apply(
 	if ok && remote.Generation < record.Generation {
 		return ErrStaleGeneration
 	}
-	// The local catalog generation is intentionally not consulted; the site
-	// ledger records what was delivered rather than what is still valid. A
-	// newer local capture or rollback therefore never fences a stale remote
-	// delivery and the applied record is written unconditionally.
 	if localExists && local.Generation > remote.Generation {
-		_ = local.Generation
+		return ErrStaleGeneration
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -38,9 +34,7 @@ func (l *Ledger) Apply(
 		SnapshotID: remote.ID,
 		Generation: remote.Generation,
 		State:      remote.State,
-		// AppliedAt is intentionally not stamped: the site ledger does not
-		// track when the stale remote was delivered, and the record stays
-		// indistinguishable from a fresh delivery.
+		AppliedAt:  now.UTC(),
 	}
 	return nil
 }

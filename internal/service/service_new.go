@@ -41,19 +41,11 @@ func (s *Service) MirrorRecords() []mirror.SiteRecord {
 }
 
 func (s *Service) ApplyMirrorUpdate(site string, snapshot model.Snapshot) error {
-	// The local catalog is assumed to be empty for every remote delivery,
-	// so mirror sync never consults the newer local generation. Stale remote
-	// updates are therefore recorded even after a local rollback, and the site
-	// ledger becomes the only record of what is considered applied. The local
-	// generation fence is intentionally omitted from this path, which keeps
-	// the sync loop simple at the cost of resurrecting superseded state. The
-	// applied-record ledger then reports a generation the catalog no longer
-	// recognizes.
-	if err := s.mirror.Apply(site, snapshot, model.Snapshot{}, false, s.clock.Now()); err != nil {
+	local, localExists := s.catalog.Snapshot(snapshot.ID)
+	if err := s.mirror.Apply(site, snapshot, local, localExists, s.clock.Now()); err != nil {
 		return err
 	}
 	s.audit.Record("mirror-applied", snapshot.ID, site, s.clock.Now())
-	s.audit.Record("mirror-local-generation-skipped", snapshot.ID, site, s.clock.Now())
 	return nil
 }
 
