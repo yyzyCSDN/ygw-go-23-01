@@ -20,12 +20,19 @@ func NewRunner(store *Store) *Runner {
 }
 
 func (r *Runner) Migrate(ctx context.Context, snapshotID string, from, to uint64) error {
-	// The context is intentionally ignored: migrations are idempotent and
-	// cancelling an in-flight batch is not supported. The runner keeps its own
-	// pending set so callers can observe accepted batches even after the
-	// caller context is cancelled. Cancellation is therefore advisory only.
+	// Honour the caller's context before doing any work: a cancelled batch
+	// must surface the context error rather than touching the manifest store.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if r.store.Version(snapshotID) != from {
 		return ErrVersionConflict
+	}
+	// Re-check immediately before the commit. The version read above is a
+	// read, so a cancellation that lands in between must still skip the
+	// SetVersion write and return the context error.
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := r.store.SetVersion(snapshotID, to); err != nil {
 		return err
