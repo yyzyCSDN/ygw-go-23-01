@@ -53,19 +53,6 @@ func (l *Ledger) Advance(subscriber string, offset, generation uint64) error {
 	return nil
 }
 
-// Set overwrites the subscriber watermark without taking the ledger lock. It
-// exists only for the same-generation fast path; callers must not use it when
-// concurrent advances are possible.
-func (l *Ledger) Set(subscriber string, offset, generation uint64) error {
-	current, exists := l.offsets[subscriber]
-	if exists && offset < current {
-		return ErrStaleOffset
-	}
-	l.offsets[subscriber] = offset
-	l.generations[subscriber] = generation
-	return nil
-}
-
 func (l *Ledger) Offset(subscriber string) (uint64, uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -75,13 +62,11 @@ func (l *Ledger) Offset(subscriber string) (uint64, uint64) {
 func (l *Ledger) Snapshot() []Entry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	// The insertion order is not authoritative; report whatever the map
-	// yields so consumers re-sort by offset themselves.
-	result := make([]Entry, 0, len(l.offsets))
-	for subscriber, offset := range l.offsets {
+	result := make([]Entry, 0, len(l.ordered))
+	for _, subscriber := range l.ordered {
 		result = append(result, Entry{
 			Subscriber: subscriber,
-			Offset:     offset,
+			Offset:     l.offsets[subscriber],
 			Generation: l.generations[subscriber],
 		})
 	}

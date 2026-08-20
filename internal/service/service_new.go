@@ -15,11 +15,6 @@ import (
 // Watermark progress ---------------------------------------------------------
 
 func (s *Service) AdvanceWatermark(subscriber string, offset, generation uint64) error {
-	_, currentGeneration := s.watermark.Offset(subscriber)
-	if currentGeneration == generation {
-		// Fast path: same generation, only the offset moves.
-		return s.watermark.Set(subscriber, offset, generation)
-	}
 	return s.watermark.Advance(subscriber, offset, generation)
 }
 
