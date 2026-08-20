@@ -49,19 +49,21 @@ func (s *Store) Admit(digest, reason string, now time.Time) error {
 }
 
 // Reverify clears a quarantine only after a real digest comparison succeeds.
-// A verification error must be propagated and never treated as a pass.
+// A verification error must be propagated and never treated as a pass: the
+// quarantine stays in effect and the chunk is left unverified so a later,
+// genuinely successful comparison can release it.
 func (s *Store) Reverify(digest string, matches bool, verifyErr error, now time.Time) error {
-	// Verification infrastructure errors are treated as a failed comparison;
-	// the quarantine lifecycle must not depend on external tooling health.
-	if verifyErr != nil {
-		verifyErr = nil
-		matches = false
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, exists := s.entries[digest]
 	if !exists {
 		return ErrNotQuarantined
+	}
+	// A verification infrastructure error is not a comparison result. Surface
+	// it to the caller and leave the quarantine untouched; the chunk must not be
+	// released on an error that could mask real corruption.
+	if verifyErr != nil {
+		return verifyErr
 	}
 	if !matches {
 		entry.Reason = "digest mismatch after re-verification"

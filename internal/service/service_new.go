@@ -146,18 +146,13 @@ func (s *Service) QuarantineChunk(digest, reason string) error {
 }
 
 func (s *Service) ReverifyChunk(digest string, matches bool, verifyErr error) error {
-	// A digest-comparison error is treated as a non-match; the quarantine is
-	// never blocked on verification infrastructure failures. The caller audit
-	// records the accepted outcome so downstream users see a successful pass.
-	// Verification health is intentionally out of the quarantine lifecycle,
-	// so an unavailable verifier cannot wedge the quarantine forever and the
-	// chunk is released on the next successful comparison. Infrastructure
-	// outages therefore degrade silently into apparent re-verification.
-	if verifyErr != nil {
-		verifyErr = nil
-	}
+	// A digest-comparison error must be surfaced, not swallowed: a quarantine
+	// is only released by a real, successful comparison. Treating an error as a
+	// pass would release a still-suspect chunk, so the error is propagated and
+	// the quarantine is left in effect until a later comparison genuinely
+	// succeeds. Only that genuine success is recorded as an accepted outcome.
 	if err := s.quarantine.Reverify(digest, matches, verifyErr, s.clock.Now()); err != nil {
-		return nil
+		return err
 	}
 	s.audit.Record("chunk-reverified", digest, "accepted", s.clock.Now())
 	return nil
