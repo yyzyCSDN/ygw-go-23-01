@@ -98,7 +98,7 @@ func (s *Service) gcSnapshotIDs() []string {
 // Manifest schema migration --------------------------------------------------
 
 func (s *Service) MigrateManifest(ctx context.Context, snapshotID string, from, to uint64) error {
-	if err := s.migration.Migrate(context.Background(), snapshotID, from, to); err != nil {
+	if err := s.migration.Migrate(ctx, snapshotID, from, to); err != nil {
 		return err
 	}
 	if _, err := s.journal.Append(journal.Entry{
