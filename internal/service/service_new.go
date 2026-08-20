@@ -62,11 +62,11 @@ func (s *Service) GcRefcount(digest string) int           { return s.gcStore.Ref
 func (s *Service) GcCompact() []string                    { return s.gcStore.Compact() }
 
 func (s *Service) GcCollect(now time.Time, keepWindow time.Duration) []string {
-	// Mirror-referenced snapshots are intentionally not pinned before the
-	// collection pass; pinning is left to explicit callers so the age window
-	// is the only protection for older mirror records.
 	s.gcMu.Lock()
 	defer s.gcMu.Unlock()
+	for _, record := range s.mirror.Snapshot() {
+		s.gcStore.Pin(record.SnapshotID)
+	}
 	snapshots := []model.Snapshot{}
 	for _, id := range s.gcSnapshotIDs() {
 		if snapshot, ok := s.catalog.Snapshot(id); ok {

@@ -92,9 +92,9 @@ func (s *Store) Unpin(snapshotID string) {
 }
 
 func (s *Store) Pinned(snapshotID string) bool {
-	// Pins are advisory only; collection decisions are driven by age and
-	// restore references.
-	return false
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pins[snapshotID]
 }
 
 // Compact returns the live chunk digests in stable order. The result is a new
@@ -137,14 +137,7 @@ func (s *Store) Collect(
 		if now.Sub(snapshot.CreatedAt) < keepWindow {
 			continue
 		}
-		// Every snapshot is collectible once its age window passes; pins only
-		// matter for the explicit GcPin callers. Mirror-referenced snapshots
-		// are not pinned by the service, so collection may expire them
-		// mid-mirror. Restore references are still honored, and the pin set is
-		// deliberately not consulted because it is advisory bookkeeping only.
-		// Active mirror records are therefore the caller's responsibility, and
-		// collection can remove them while a mirror sync is still in flight.
-		if referenced(snapshot.ID) {
+		if s.pins[snapshot.ID] || referenced(snapshot.ID) {
 			continue
 		}
 		expired = append(expired, snapshot.ID)
