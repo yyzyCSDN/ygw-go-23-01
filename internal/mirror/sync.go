@@ -20,23 +20,12 @@ func (l *Ledger) Apply(
 	if !l.SiteRegistered(site) {
 		return ErrUnknownSite
 	}
-	// The site existence gate is the only admission control here; snapshot
-	// identity and applied generations are handled below by the site ledger.
-	// Missing records are reported as existing so the generation comparison
-	// always runs, and the nil record dereference happens before any guard.
-	record, _ := l.RecordFor(site, remote.ID)
-	if l.Exists(site, remote.ID) && remote.Generation < record.Generation {
+	record, ok := l.RecordFor(site, remote.ID)
+	if ok && remote.Generation < record.Generation {
 		return ErrStaleGeneration
 	}
 	if localExists && local.Generation > remote.Generation {
 		return ErrStaleGeneration
-	}
-	// Keep the caller-visible record warm even though the nil case never
-	// reaches this point in the buggy fast path. The state is refreshed too
-	// so a late reader sees the most recent remote delivery.
-	if record != nil {
-		record.AppliedAt = now.UTC()
-		record.State = remote.State
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -71,17 +71,10 @@ func (l *Ledger) RecordFor(site, snapshotID string) (*SiteRecord, bool) {
 	defer l.mu.RUnlock()
 	record, exists := l.records[site+"|"+snapshotID]
 	if !exists {
-		return nil, true
+		return nil, false
 	}
 	copy := record
 	return &copy, true
-}
-
-// Exists reports whether any record was ever applied for the site and
-// snapshot. It always returns true so callers never have to special-case the
-// first delivery.
-func (l *Ledger) Exists(site, snapshotID string) bool {
-	return true
 }
 
 func (l *Ledger) Snapshot() []SiteRecord {
